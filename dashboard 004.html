@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RouteX AI | Real-Time NS-2 Command</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #020617; color: #f1f5f9; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .glass { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); transition: all 0.3s ease; }
+        #nsCanvas { background: #cbd5e1; border-radius: 12px; }
+        .update-flash { animation: flash-blue 0.8s ease-out; }
+        @keyframes flash-blue {
+            0% { color: #3b82f6; }
+            100% { color: inherit; }
+        }
+    </style>
+</head>
+<body class="p-4 lg:p-6 space-y-6">
+
+    <header class="max-w-[1600px] mx-auto flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <div class="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-500/20">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+            </div>
+            <h1 class="text-xl font-bold tracking-tighter uppercase">RouteX <span class="text-blue-500 font-normal">Command</span></h1>
+        </div>
+        <div class="text-[10px] mono text-slate-500 bg-slate-900 px-3 py-1 rounded-full border border-slate-800">
+            LIVE_SYNC_ACTIVE: <span id="sync-timer">0s</span> ago
+        </div>
+    </header>
+
+    <div class="max-w-[1600px] mx-auto grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="glass p-5 rounded-2xl border-l-4 border-l-blue-500">
+            <p class="text-slate-500 text-[10px] font-bold uppercase mb-1">Active Fleet</p>
+            <div class="flex justify-between items-end">
+                <h2 id="val-fleet" class="text-3xl font-black">128</h2>
+                <span class="text-blue-500 text-[10px] font-bold pb-1">Live Feed</span>
+            </div>
+        </div>
+        <div class="glass p-5 rounded-2xl border-l-4 border-l-orange-500">
+            <p class="text-slate-500 text-[10px] font-bold uppercase mb-1">AI Reroutes (24h)</p>
+            <div class="flex justify-between items-end">
+                <h2 id="val-reroutes" class="text-3xl font-black">816</h2>
+                <span id="reroute-trend" class="text-orange-400 text-[10px] font-bold pb-1">+12% vs avg</span>
+            </div>
+        </div>
+        <div class="glass p-5 rounded-2xl border-l-4 border-l-emerald-500">
+            <p class="text-slate-500 text-[10px] font-bold uppercase mb-1">Avg. Fuel Saved</p>
+            <div class="flex justify-between items-end">
+                <h2 id="val-fuel" class="text-3xl font-black text-emerald-400">18.2%</h2>
+                <span class="text-slate-500 text-[10px] font-bold pb-1 uppercase tracking-tighter">Optimized</span>
+            </div>
+        </div>
+        <div class="glass p-5 rounded-2xl border-l-4 border-l-purple-500">
+            <p class="text-slate-500 text-[10px] font-bold uppercase mb-1">Engine Latency</p>
+            <div class="flex justify-between items-end">
+                <h2 id="val-latency" class="text-3xl font-black mono text-purple-400">37ms</h2>
+                <span class="w-2 h-2 bg-emerald-500 rounded-full mb-2 animate-pulse"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <div class="lg:col-span-8 space-y-6">
+            <div class="glass p-4 rounded-3xl">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-xs font-bold uppercase tracking-widest text-slate-400 italic">NAM Visualizer: usor2.nam (Mesh Connected)</h3>
+                    <div class="text-[10px] mono text-slate-500">SIM_TIME: <span id="timestamp">12.307666</span></div>
+                </div>
+                <canvas id="nsCanvas" class="w-full h-[380px] shadow-inner"></canvas>
+            </div>
+
+            <div class="glass rounded-3xl overflow-hidden">
+                <div class="p-4 border-b border-white/5 bg-white/5">
+                    <h3 class="font-bold text-xs uppercase tracking-widest">Live Decision Stream</h3>
+                </div>
+                <div class="overflow-y-auto h-[220px]">
+                    <table class="w-full text-left">
+                        <thead class="sticky top-0 bg-slate-900 text-[9px] uppercase text-slate-500 font-bold">
+                            <tr>
+                                <th class="px-6 py-3">Vehicle</th>
+                                <th class="px-6 py-3">Trigger</th>
+                                <th class="px-6 py-3">AI Action</th>
+                                <th class="px-6 py-3 text-right">Impact</th>
+                            </tr>
+                        </thead>
+                        <tbody id="log-body" class="mono text-[11px] divide-y divide-white/5"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="lg:col-span-4 space-y-6">
+            <div class="bg-blue-600 p-6 rounded-3xl shadow-xl">
+                <h3 class="font-bold text-lg mb-2">Optimization Focus</h3>
+                <p class="text-blue-100 text-[11px] mb-6 opacity-90 leading-relaxed">
+                    "Currently prioritizing fuel conservation over delivery speed due to peak surge prices."
+                </p>
+                <div class="space-y-4">
+                    <div class="flex justify-between text-xs font-bold">
+                        <span>Cost Saving</span>
+                        <span id="cost-percent">92%</span>
+                    </div>
+                    <div class="w-full bg-blue-800 rounded-full h-2">
+                        <div id="cost-bar" class="bg-white h-2 rounded-full transition-all duration-1000" style="width: 92%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass p-6 rounded-3xl border border-orange-500/20">
+                <h3 class="text-sm font-bold uppercase mb-6 text-slate-400">Active Anomalies</h3>
+                <div id="anomaly-timeline" class="space-y-6 relative before:absolute before:inset-0 before:ml-3 before:-translate-x-px before:h-full before:w-0.5 before:bg-slate-800">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-[1600px] mx-auto glass rounded-2xl p-4 flex flex-col md:flex-row justify-between items-center gap-4 border-t-2 border-t-blue-500">
+        <div class="flex items-center gap-4">
+            <div class="bg-emerald-500/20 p-2 rounded-lg"><svg class="h-5 w-5 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a8 8 0 100 16 8 8 0 000-16zm1 11H9v-2h2v2zm0-4H9V5h2v4z"/></svg></div>
+            <div>
+                <h4 class="text-sm font-bold">Logistics Notification Center</h4>
+                <p id="system-msg" class="text-[10px] text-slate-500 uppercase">System Ready</p>
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <button class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg text-[9px] font-bold uppercase">Ignore</button>
+            <button class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg text-[9px] font-bold uppercase">Sync Cloud</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('nsCanvas');
+        const ctx = canvas.getContext('2d');
+        let nodes = [];
+        const vehicles = ["TRK-8821", "VAN-402", "TRK-990", "TRK-112", "VAN-091"];
+        
+        function initNodes() {
+            for (let i = 1; i <= 32; i++) {
+                nodes.push({ id: i, x: Math.random() * 450 + 50, y: Math.random() * 250 + 50, color: (i === 29 || i === 8 || i === 35) ? '#ef4444' : '#22c55e', pulse: 0, isAttacker: (i === 29 || i === 8 || i === 35) });
+            }
+        }
+
+        function draw() {
+            canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // DRAW CONNECTIONS (RESTORED)
+            ctx.strokeStyle = "rgba(0,0,0,0.15)";
+            ctx.lineWidth = 1;
+            nodes.forEach((n1, i) => {
+                nodes.slice(i + 1).forEach(n2 => {
+                    const d = Math.hypot(n1.x - n2.x, n1.y - n2.y);
+                    if (d < 90) { ctx.beginPath(); ctx.moveTo(n1.x, n1.y); ctx.lineTo(n2.x, n2.y); ctx.stroke(); }
+                });
+            });
+
+            // DRAW NODES
+            nodes.forEach(node => {
+                if(node.isAttacker || node.id === 11) {
+                    node.pulse += 0.5; if(node.pulse > 45) node.pulse = 0;
+                    ctx.beginPath(); ctx.arc(node.x, node.y, node.pulse, 0, Math.PI*2);
+                    ctx.strokeStyle = `rgba(0,0,0,${1 - node.pulse/45})`; ctx.stroke();
+                }
+                ctx.beginPath(); ctx.arc(node.x, node.y, 9, 0, Math.PI*2);
+                ctx.fillStyle = node.color; ctx.fill(); ctx.stroke();
+                ctx.fillStyle = "#fff"; ctx.font = "bold 8px Arial"; ctx.textAlign = "center";
+                ctx.fillText(node.id, node.x, node.y + 3);
+                node.x += (Math.random() - 0.5) * 0.4; node.y += (Math.random() - 0.5) * 0.4;
+            });
+            document.getElementById('timestamp').innerText = (parseFloat(document.getElementById('timestamp').innerText) + 0.001).toFixed(6);
+            requestAnimationFrame(draw);
+        }
+
+        // UPDATE ALL OPTIONS EVERY FEW SECONDS
+        function updateAllMetrics() {
+            // Update Latency
+            const lat = document.getElementById('val-latency');
+            lat.innerText = (Math.floor(Math.random() * 10) + 32) + "ms";
+            lat.classList.add('update-flash'); setTimeout(() => lat.classList.remove('update-flash'), 800);
+
+            // Update Reroutes
+            document.getElementById('val-reroutes').innerText = Math.floor(Math.random() * 5) + 814;
+            
+            // Update Fuel
+            document.getElementById('val-fuel').innerText = (18 + Math.random()).toFixed(1) + "%";
+
+            // Update Sync Timer
+            document.getElementById('sync-timer').innerText = "0s";
+            
+            // Update Cost Saving Bar
+            const newCost = Math.floor(Math.random() * 5) + 90;
+            document.getElementById('cost-percent').innerText = newCost + "%";
+            document.getElementById('cost-bar').style.width = newCost + "%";
+        }
+
+        function addAnomaly() {
+            const container = document.getElementById('anomaly-timeline');
+            const items = [
+                { t: "Congestion Alert", d: "Sector B delay +15m", c: "orange" },
+                { t: "Path Collision", d: "AI resolved intersection sync", c: "blue" }
+            ];
+            const item = items[Math.floor(Math.random()*items.length)];
+            const div = document.createElement('div');
+            div.className = "relative pl-8 animate-pulse";
+            div.innerHTML = `<div class="absolute left-0 top-1 w-6 h-6 bg-slate-900 border-2 border-${item.c}-500 rounded-full flex items-center justify-center"><div class="w-2 h-2 bg-${item.c}-500 rounded-full"></div></div><p class="text-[10px] text-slate-500 font-bold">SEC: ${Math.floor(Math.random()*60)}</p><p class="text-xs text-slate-300">${item.t}: ${item.d}</p>`;
+            container.prepend(div);
+            if(container.children.length > 3) container.removeChild(container.lastChild);
+        }
+
+        initNodes(); draw();
+        setInterval(updateAllMetrics, 2000);
+        setInterval(() => {
+            const body = document.getElementById('log-body');
+            const row = document.createElement('tr');
+            row.innerHTML = `<td class="px-6 py-4 text-blue-400 font-bold">${vehicles[Math.floor(Math.random()*5)]}</td><td class="px-6 py-4">Triggered</td><td class="px-6 py-4 italic">Optimized</td><td class="px-6 py-4 text-right text-emerald-400">-${Math.floor(Math.random()*5)}m</td>`;
+            body.prepend(row); if(body.children.length > 8) body.removeChild(body.lastChild);
+        }, 3000);
+        setInterval(addAnomaly, 8000);
+    </script>
+</body>
+</html>
